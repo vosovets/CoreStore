@@ -554,24 +554,22 @@ public final class DataStack: Equatable {
         )
         persistentStore.storageInterface = storage
         
-        self.storeMetadataUpdateQueue.async(flags: .barrier) {
+        // Remove async with barrier because it force to fail migration
+        let configurationName = persistentStore.configurationName
+        self.persistentStoresByFinalConfiguration[configurationName] = persistentStore
+        for entityDescription in (self.coordinator.managedObjectModel.entities(forConfigurationName: configurationName) ?? []) {
             
-            let configurationName = persistentStore.configurationName
-            self.persistentStoresByFinalConfiguration[configurationName] = persistentStore
-            for entityDescription in (self.coordinator.managedObjectModel.entities(forConfigurationName: configurationName) ?? []) {
+            let managedObjectClassName = entityDescription.managedObjectClassName!
+            CoreStore.assert(
+                NSClassFromString(managedObjectClassName) != nil,
+                "The class \(cs_typeName(managedObjectClassName)) for the entity \(cs_typeName(entityDescription.name)) does not exist. Check if the subclass type and module name are properly configured."
+            )
+            let entityIdentifier = EntityIdentifier(entityDescription)
+            if self.finalConfigurationsByEntityIdentifier[entityIdentifier] == nil {
                 
-                let managedObjectClassName = entityDescription.managedObjectClassName!
-                CoreStore.assert(
-                    NSClassFromString(managedObjectClassName) != nil,
-                    "The class \(cs_typeName(managedObjectClassName)) for the entity \(cs_typeName(entityDescription.name)) does not exist. Check if the subclass type and module name are properly configured."
-                )
-                let entityIdentifier = EntityIdentifier(entityDescription)
-                if self.finalConfigurationsByEntityIdentifier[entityIdentifier] == nil {
-                    
-                    self.finalConfigurationsByEntityIdentifier[entityIdentifier] = []
-                }
-                self.finalConfigurationsByEntityIdentifier[entityIdentifier]?.insert(configurationName)
+                self.finalConfigurationsByEntityIdentifier[entityIdentifier] = []
             }
+            self.finalConfigurationsByEntityIdentifier[entityIdentifier]?.insert(configurationName)
         }
         storage.cs_didAddToDataStack(self)
         return persistentStore
